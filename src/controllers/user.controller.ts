@@ -9,12 +9,19 @@ const register = async (req: any, res: any) => {
   try {
     const { email, password } = req.body;
 
-    const verificationOtp = Math.floor(Math.random() * 1000000)
-    const otp = verificationOtp.toString()
-    console.log(otp);
+    function generateOtp(l = 6) {
+      let otp = ""
+      for (let i = 0; i < l; i++) {
+        otp += Math.floor(Math.random() * 10)
+      }
+      return otp
+    }
+
+    const otp = generateOtp()
+
     
     const hashedOtp = await bcrypt.hash(otp,10)
-
+    
     // data validate
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required.' });
@@ -23,7 +30,7 @@ const register = async (req: any, res: any) => {
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
-
+    
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists.' });
     }
@@ -39,7 +46,8 @@ const register = async (req: any, res: any) => {
         otp: hashedOtp
       },
     });
-
+    console.log(otp);
+    
     //create token
     const jwt_token = jwt.sign({userId: user.id}, `${process.env.VERIFY_EMAIL_JWT_SECRET}`, {expiresIn: "455m"})
     // return the user
@@ -61,7 +69,7 @@ const register = async (req: any, res: any) => {
   }
 };
 
-const verifyemail = async (req: any, res: any) => {
+const verifyemailOtp = async (req: any, res: any) => {
   const { otp } = req.body
   const  id = req.userId
 
@@ -97,4 +105,4 @@ const verifyemail = async (req: any, res: any) => {
   
 }
 
-export {register, verifyemail}
+export {register, verifyemailOtp}

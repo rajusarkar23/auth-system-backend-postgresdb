@@ -1,6 +1,7 @@
 import express from "express"
 import dotenv from "dotenv"
 import cookieParser from "cookie-parser"
+import cors from "cors"
 
 // env config
 dotenv.config()
@@ -10,9 +11,15 @@ const app = express()
 // add port
 const PORT = process.env.PORT || 3838
 
-// accept json and cokkies
+// accept json and cookies
 app.use(express.json())
 app.use(cookieParser())
+//cors
+app.use(cors({
+    origin: "http://localhost:5173",
+    methods: "GET,HEAD,POST,PUT,PATCH,DELETE",
+    credentials: true
+}))
 
 // router
 import userRoute from "./routes/user.route"
