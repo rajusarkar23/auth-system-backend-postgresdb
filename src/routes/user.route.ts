@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { register, verifyemailOtp } from "../controllers/user.controller";
+import { login, register, verifyemailOtp } from "../controllers/user.controller";
 import { verifyEmailTokenMiddleWare } from "../middlewares/user.middleware";
 
-const router = Router()
+const router = Router();
 
-router.post("/register", register)
-router.post("/verifyemailotp",verifyEmailTokenMiddleWare, verifyemailOtp)
-export default router
+router.post("/register", register);
+router.post("/verifyemailotp", verifyEmailTokenMiddleWare, verifyemailOtp);
+router.post("/login", login)
+export default router;

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { json } from 'express';
 import jwt from "jsonwebtoken"
 
 const prisma = new PrismaClient();
@@ -69,6 +70,7 @@ const register = async (req: any, res: any) => {
   }
 };
 
+// veriy email otp
 const verifyemailOtp = async (req: any, res: any) => {
   const { otp } = req.body
   const  id = req.userId
@@ -103,6 +105,38 @@ const verifyemailOtp = async (req: any, res: any) => {
   }
 
   
-}
+};
 
-export {register, verifyemailOtp}
+// signin
+const login = async (req: any, res: any) => {
+  // grab the client side data
+  const {email, password} = req.body
+  // check if data exists or not
+  if (!email || !password) {
+    return res.status(400).json({message: "Email and password both are required."})
+  }
+  // find the user with provided email
+  const findUser = await prisma.user.findUnique({
+    where: {
+      email: email
+    }
+  })
+  // if not found
+  if (!findUser) {
+    return res.status(400).json({success: false, message: "User not found"})
+  }
+  // if found
+  const dbPassword = findUser.password
+  const comparePassword = bcrypt.compareSync(password, dbPassword)
+
+  // password comparison failed
+  if (!comparePassword) {
+    return res.status(400).json({success: false, message: "Wrong credentials"})
+  }
+  // comparison success
+  const jwt_token = jwt.sign({id: findUser.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "45m"})
+
+  return res.cookie("sessionToken", jwt_token).status(200).json({success: true, message: "Login success", jwt_token})
+};
+
+export {register, verifyemailOtp, login}
