@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from "jsonwebtoken"
-import nodemailer from "nodemailer"
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
 
 // initialize prisma client
 const prisma = new PrismaClient();
@@ -10,43 +10,49 @@ const prisma = new PrismaClient();
 const register = async (req: any, res: any) => {
   try {
     // Grab email and password
-    const { email, password } = req.body;
+    const { email, username, password } = req.body;
 
     // nodemailer logic
-    const sender = process.env.EMAIL
-    const mailPassword = process.env.EMAIL_PASSWORD
+    const sender = process.env.EMAIL;
+    const mailPassword = process.env.EMAIL_PASSWORD;
     // create nodemailer transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: sender,
-        pass: mailPassword
-      }
-    })
+        pass: mailPassword,
+      },
+    });
 
     // Create otp generator func
     function generateOtp(l = 6) {
-      let otp = ""
+      let otp = "";
       for (let i = 0; i < l; i++) {
-        otp += Math.floor(Math.random() * 10)
+        otp += Math.floor(Math.random() * 10);
       }
-      return otp
+      return otp;
     }
     // hold otp in a variable
-    const otp = generateOtp()
+    const otp = generateOtp();
     // hash the otp
-    const hashedOtp = await bcrypt.hash(otp,10)
+    const hashedOtp = await bcrypt.hash(otp, 10);
     // data validate
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required.' });
+    if (!email || !password || !username) {
+      return res
+        .status(400)
+        .json({ message: "Email and password are required." });
     }
     // check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: email }, { username: username }],
+      },
     });
-    
+
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists.' });
+      return res
+        .status(400)
+        .json({ message: "User already exists with this email or username." });
     }
     // hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -54,16 +60,21 @@ const register = async (req: any, res: any) => {
     const user = await prisma.user.create({
       data: {
         email,
+        username,
         password: hashedPassword,
         verified: false,
-        role: 'USER',
-        otp: hashedOtp
+        role: "USER",
+        otp: hashedOtp,
       },
     });
     console.log(otp);
-    
+
     // create token
-    const jwt_token = jwt.sign({userId: user.id}, `${process.env.VERIFY_EMAIL_JWT_SECRET}`, {expiresIn: "455m"})
+    const jwt_token = jwt.sign(
+      { userId: user.id },
+      `${process.env.VERIFY_EMAIL_JWT_SECRET}`,
+      { expiresIn: "455m" }
+    );
     // send mail
     await transporter.sendMail({
       from: sender,
@@ -91,50 +102,55 @@ const register = async (req: any, res: any) => {
       </table>
     </div>
         `,
-    })
+    });
 
     // return the user
-    return res.cookie("verifyEmailToken", jwt_token).status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        verified: user.verified,
-        role: user.role,
-        otp: user.otp,
-        jwt_token
-      },
-    });
+    return res
+      .cookie("verifyEmailToken", jwt_token)
+      .status(201)
+      .json({
+        success: true,
+        message: "User registered successfully",
+        user: {
+          id: user.id,
+          email: user.email,
+          verified: user.verified,
+          role: user.role,
+          otp: user.otp,
+          jwt_token,
+        },
+      });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: 'Something went wrong. Please try again.' });
+    return res
+      .status(500)
+      .json({ message: "Something went wrong. Please try again." });
   }
 };
 
 // veriy email otp
 const verifyemailOtp = async (req: any, res: any) => {
-  const { otp } = req.body
-  const  id = req.userId
+  const { otp } = req.body;
+  const id = req.userId;
 
   try {
     // grab the user
     const user = await prisma.user.findUnique({
       where: {
-        id: Number(id)
-      }
-    })
+        id: Number(id),
+      },
+    });
     // check does user available
     if (!user) {
       console.log("User not found");
-    } 
+    }
     // grab user otp from db
-    const userOtp = user!.otp
+    const userOtp = user!.otp;
     // compare the otp
-    const comparedOtp = bcrypt.compareSync(otp, userOtp)
+    const comparedOtp = bcrypt.compareSync(otp, userOtp);
 
     if (!comparedOtp) {
-      return res.status(400).json({success: false, message: "Wrong OTP"})
+      return res.status(400).json({ success: false, message: "Wrong OTP" });
     }
     // update verification field
     await prisma.user.update({
@@ -142,55 +158,100 @@ const verifyemailOtp = async (req: any, res: any) => {
         email: user!.email,
       },
       data: {
-        verified: true
-      }
-    })
+        verified: true,
+      },
+    });
     // sign jwt
-    const jwt_token = jwt.sign({userId: user?.id}, `${process.env.sessionToken_JWT_SECRET}`)
+    const jwt_token = jwt.sign(
+      { userId: user?.id },
+      `${process.env.sessionToken_JWT_SECRET}`
+    );
     // return res
-    return res.cookie("sessionToken", jwt_token).status(200).json({success: true, message: "Correct OTP", jwt_token})
-    
+    return res
+      .cookie("sessionToken", jwt_token)
+      .status(200)
+      .json({ success: true, message: "Correct OTP", jwt_token });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({message: "Something went wrong"})
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 // login
 const login = async (req: any, res: any) => {
   // grab the client side data
-  const {email, password} = req.body
+  const { usernameOrEmail, password } = req.body;
   // check if data exists or not
-  if (!email || !password) {
-    return res.status(400).json({message: "Email and password both are required."})
+  if (!usernameOrEmail || !password) {
+    return res
+      .status(400)
+      .json({ message: "Both credential fields are required." });
   }
   // find the user with provided email
-  const findUser = await prisma.user.findUnique({
+  const findUser = await prisma.user.findFirst({
     where: {
-      email: email
-    }
-  })
+      OR: [{ email: usernameOrEmail }, { username: usernameOrEmail }],
+    },
+  });
+  console.log(findUser);
+
   // if not found
   if (!findUser) {
-    return res.status(400).json({success: false, message: "User not found"})
+    return res.status(400).json({ success: false, message: "User not found" });
   }
   // if found
-  const dbPassword = findUser.password
-  const comparePassword = bcrypt.compareSync(password, dbPassword)
+  const dbPassword = findUser.password;
+  const comparePassword = bcrypt.compareSync(password, dbPassword);
 
   // password comparison failed
   if (!comparePassword) {
-    return res.status(400).json({success: false, message: "Wrong credentials"})
+    return res
+      .status(400)
+      .json({ success: false, message: "Wrong credentials" });
   }
 
   if (findUser.verified === false) {
     console.log("Not verified");
-    return res.status(400).json({success: false, message: "Before login please verify with otp."})
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "Before login please verify with otp.",
+      });
   }
   // comparison success
-  const jwt_token = jwt.sign({id: findUser.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "45m"})
+  const jwt_token = jwt.sign(
+    { id: findUser.id },
+    `${process.env.sessionToken_JWT_SECRET}`,
+    { expiresIn: "45m" }
+  );
 
-  return res.cookie("sessionToken", jwt_token).status(200).json({success: true, message: "Login success", jwt_token})
+  return res
+    .cookie("sessionToken", jwt_token)
+    .status(200)
+    .json({ success: true, message: "Login success", jwt_token });
 };
 
-export {register, verifyemailOtp, login}
+// checkusernameUnique
+const checkusernameUnique = async (req: any, res: any) => {
+  const { username } = req.body;
+  console.log("hitted");
+  console.log(username);
+  const checkusernameUnique = await prisma.user.findUnique({
+    where: {
+      username: username,
+    },
+  });
+
+  if (checkusernameUnique) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Username already taken" });
+  }
+
+  return res
+    .status(200)
+    .json({ success: true, message: "Username is available" });
+};
+
+export { register, verifyemailOtp, login, checkusernameUnique };
