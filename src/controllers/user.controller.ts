@@ -1,15 +1,30 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { json } from 'express';
 import jwt from "jsonwebtoken"
+import nodemailer from "nodemailer"
 
+// initialize prisma client
 const prisma = new PrismaClient();
 
 // user register
 const register = async (req: any, res: any) => {
   try {
+    // Grab email and password
     const { email, password } = req.body;
 
+    // nodemailer logic
+    const sender = process.env.EMAIL
+    const mailPassword = process.env.EMAIL_PASSWORD
+    // create nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: sender,
+        pass: mailPassword
+      }
+    })
+
+    // Create otp generator func
     function generateOtp(l = 6) {
       let otp = ""
       for (let i = 0; i < l; i++) {
@@ -17,12 +32,10 @@ const register = async (req: any, res: any) => {
       }
       return otp
     }
-
+    // hold otp in a variable
     const otp = generateOtp()
-
-    
+    // hash the otp
     const hashedOtp = await bcrypt.hash(otp,10)
-    
     // data validate
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required.' });
@@ -49,8 +62,37 @@ const register = async (req: any, res: any) => {
     });
     console.log(otp);
     
-    //create token
+    // create token
     const jwt_token = jwt.sign({userId: user.id}, `${process.env.VERIFY_EMAIL_JWT_SECRET}`, {expiresIn: "455m"})
+    // send mail
+    await transporter.sendMail({
+      from: sender,
+      to: email,
+      replyTo: sender,
+      subject: `Verification OTP`,
+      html: `
+       <div style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 0; margin: 0; width: 100%; height: 100%;">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" style="width: 100%; height: 100%; background-color: #f4f4f4; text-align: center;">
+        <tr>
+          <td style="padding: 40px 0;">
+            <table align="center" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); text-align: center;">
+              <tr>
+                <td>
+                  <h2 style="color: #333333; margin-bottom: 20px;">Here is your OTP</h2>
+                  <p style="font-size: 16px; color: #555555; margin-bottom: 20px;">Welcome onboard, Please verify your email with the below OTP.</p>
+                  <p style="font-size: 18px; color: #333333; margin-bottom: 30px;"><strong>OTP: ${otp}</strong></p>
+                  <p style="font-size: 16px; color: #555555; margin-bottom: 20px;">From: ${sender}</p>
+                  <p style="font-size: 14px; color: #777777;">This is an automated message, please do not reply.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+        `,
+    })
+
     // return the user
     return res.cookie("verifyEmailToken", jwt_token).status(201).json({
       success: true,
@@ -94,20 +136,27 @@ const verifyemailOtp = async (req: any, res: any) => {
     if (!comparedOtp) {
       return res.status(400).json({success: false, message: "Wrong OTP"})
     }
-
+    // update verification field
+    await prisma.user.update({
+      where: {
+        email: user!.email,
+      },
+      data: {
+        verified: true
+      }
+    })
+    // sign jwt
     const jwt_token = jwt.sign({userId: user?.id}, `${process.env.sessionToken_JWT_SECRET}`)
-
+    // return res
     return res.cookie("sessionToken", jwt_token).status(200).json({success: true, message: "Correct OTP", jwt_token})
     
   } catch (error) {
     console.log(error);
     return res.status(500).json({message: "Something went wrong"})
   }
-
-  
 };
 
-// signin
+// login
 const login = async (req: any, res: any) => {
   // grab the client side data
   const {email, password} = req.body
@@ -132,6 +181,11 @@ const login = async (req: any, res: any) => {
   // password comparison failed
   if (!comparePassword) {
     return res.status(400).json({success: false, message: "Wrong credentials"})
+  }
+
+  if (findUser.verified === false) {
+    console.log("Not verified");
+    return res.status(400).json({success: false, message: "Before login please verify with otp."})
   }
   // comparison success
   const jwt_token = jwt.sign({id: findUser.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "45m"})
