@@ -2,9 +2,14 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import { OAuth2Client } from "google-auth-library"
 
 // initialize prisma client
 const prisma = new PrismaClient();
+
+const client = new OAuth2Client("993013001927-j9mtbi0krufut6t355b5tnkdeov6khhm.apps.googleusercontent.com")
+
+
 
 // user register
 const register = async (req: any, res: any) => {
@@ -76,7 +81,7 @@ const register = async (req: any, res: any) => {
       { expiresIn: "455m" }
     );
     // send mail
-    await transporter.sendMail({
+    const sendMAil = await transporter.sendMail({
       from: sender,
       to: email,
       replyTo: sender,
@@ -104,6 +109,7 @@ const register = async (req: any, res: any) => {
         `,
     });
 
+    console.log(sendMAil);
     // return the user
     return res
       .cookie("verifyEmailToken", jwt_token)
@@ -254,4 +260,27 @@ const checkusernameUnique = async (req: any, res: any) => {
     .json({ success: true, message: "Username is available" });
 };
 
-export { register, verifyemailOtp, login, checkusernameUnique };
+// googleauth
+
+async function verifyAccessToken(accessToken: string) {
+  const ticket = await client.getTokenInfo(accessToken)
+  console.log(`Ticket is: ${ticket.scopes}`);
+  return ticket
+}
+
+const googleauth = async (req:any, res: any) => {
+  const {token} = req.body
+
+ try {
+  const userInfo = await verifyAccessToken(token)
+  console.log(`Email is: ${userInfo.email}`);
+  
+  console.log(userInfo);
+  
+ } catch (error) {
+  console.log(error);
+  
+ }
+}
+
+export { register, verifyemailOtp, login, checkusernameUnique, googleauth };
