@@ -2,14 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
-import { OAuth2Client } from "google-auth-library";
 
 // initialize prisma client
 const prisma = new PrismaClient();
-
-const client = new OAuth2Client(
-  "993013001927-j9mtbi0krufut6t355b5tnkdeov6khhm.apps.googleusercontent.com"
-);
 
 // user register
 const register = async (req: any, res: any) => {
@@ -134,7 +129,7 @@ const register = async (req: any, res: any) => {
   }
 };
 
-// veriy email otp
+//=> Verify email otp
 const verifyemailOtp = async (req: any, res: any) => {
   const { otp } = req.body;
   const id = req.userId;
@@ -183,7 +178,7 @@ const verifyemailOtp = async (req: any, res: any) => {
   }
 };
 
-// login
+//=> Login
 const login = async (req: any, res: any) => {
   // grab the client side data
   const { usernameOrEmail, password } = req.body;
@@ -236,7 +231,7 @@ const login = async (req: any, res: any) => {
     .json({ success: true, message: "Login success", jwt_token });
 };
 
-// checkusernameUnique
+//=> Check username unique
 const checkusernameUnique = async (req: any, res: any) => {
   const { username } = req.body;
   console.log("hitted");
@@ -258,74 +253,73 @@ const checkusernameUnique = async (req: any, res: any) => {
     .json({ success: true, message: "Username is available" });
 };
 
-// googleOauth
-async function verifyAccessToken(accessToken: string) {
-  const ticket = await client.getTokenInfo(accessToken);
-  return ticket;
-}
+//=> Google Oauth
 
 const googleauth = async (req: any, res: any) => {
-  const { token } = req.body;
-
-  function generateOtpAndPassword (l = 6) {
-    let otpAndPassword = ""
-    for(let  i = 0; i < l; i++){
-      otpAndPassword += Math.floor(Math.random() * 10)
-    }
-    return otpAndPassword
-  }
-
-  const otpAndPassword = generateOtpAndPassword()
-  const hashedOtp = bcrypt.hashSync(otpAndPassword,10);
-  const hashedPassword = bcrypt.hashSync(otpAndPassword, 10)
-
+  const {email, name} = req.body
   
-  try {
-    const userInfo = await verifyAccessToken(token);
-    console.log(`This is user expiry: ${userInfo.expiry_date}`);
-    
-    const emailId = userInfo.email;
-    console.log(emailId);
-    
-    const user = await prisma.user.findUnique({
-      where: {
-        email: emailId
-      }
-    })
-    if (user) {
-      console.log(user);
-      const jwt_token = jwt.sign({userId: user.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "455m"})
-      return res.cookie("sessionToken", jwt_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax"
-      }).status(200).json({success: true, message: "User already exists, redirecting to profile", jwt_token})
+  const user = await prisma.user.findUnique({
+    where:{
+      email: email
     }
+  })
 
-    const createUser = await prisma.user.create({
-      data: {
-        email: emailId!,
-        username: emailId!,
-        password: hashedPassword,
-        verified: true,
-        otp: hashedOtp,
-      },
-    });
-
-    if (!createUser) {
-      console.log("Something went wrong please try again");
-      return res.status(500).json({success: false, message: "Something went wrong."})
-    }
-
-    const jwt_token = jwt.sign({userId: createUser.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "445m"},)
-
-    return res.cookie("sessionToken", jwt_token, {
-      httpOnly: true,
-      sameSite: "None"
-    }).status(200).json({success: true, message: "User created and redirected to profile.", jwt_token})
-  } catch (error) {
-    console.log(error);
+  if (user) {
+    const jwt_token = jwt.sign({userId : user.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn:"5m"})
+    
+    console.log(user);
+    return res.cookie("sessionToken", jwt_token).status(200).json({success: true, message: "User found"})
+  
   }
-};
 
-export { register, verifyemailOtp, login, checkusernameUnique, googleauth };
+  // else
+
+   // Create otp generator func
+   function generateOtp(l = 6) {
+    let otp = "";
+    for (let i = 0; i < l; i++) {
+      otp += Math.floor(Math.random() * 10);
+    }
+    return otp;
+  }
+  // hold otp in a variable
+  const otp = generateOtp();
+  // hash the otp
+  const hashedOtp = await bcrypt.hash(otp, 10);
+
+  const createANewUser = await prisma.user.create({
+    data: {
+      username: email,
+      email: email,
+      otp: hashedOtp,
+      password: `${hashedOtp}+${process.env.AUTO_PASSWORD_GENERATOR_KEY}`
+    }
+  })
+
+  console.log(createANewUser);
+
+  const jwt_token = jwt.sign({userId: createANewUser.id}, `${process.env.sessionToken_JWT_SECRET}`, {expiresIn: "5m"})
+  
+  return res.cookie("sessionToken", jwt_token).status(201).json({success: true, message: "User created and redirecting to profile"})
+  
+}
+const checkvalidjwt = async (req: any, res: any) => {
+  const id  = req.userId;
+  
+  const user = await prisma.user.findUnique({
+    where: {
+      id: Number(id)
+    }
+  })
+
+  if (!user) {
+    console.log("No user found");
+    return res.status(400).json({success: false, message: "No user found"})
+  }
+  console.log(user);
+  
+  return res.status(200).json({success: true, message: "User found"})
+  
+}
+
+export { register, verifyemailOtp, login, checkusernameUnique, googleauth, checkvalidjwt };
