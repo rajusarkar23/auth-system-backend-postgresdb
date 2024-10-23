@@ -1,12 +1,13 @@
 import { Router } from "express";
-import { checkusernameUnique, googleauth, login, register, verifyemailOtp } from "../controllers/user.controller";
-import { verifyEmailTokenMiddleWare } from "../middlewares/user.middleware";
+import { checkusernameUnique, checkvalidjwt, googleauth, login, register, verifyemailOtp } from "../controllers/user.controller";
+import { validUser, verifyEmailJwtTokenMiddleWare } from "../middlewares/user.middleware";
 
 const router = Router();
 
 router.post("/register", register);
-router.post("/verifyemailotp", verifyEmailTokenMiddleWare, verifyemailOtp);
+router.post("/verifyemailotp", verifyEmailJwtTokenMiddleWare, verifyemailOtp);
 router.post("/login", login);
 router.post("/checkusernameUnique", checkusernameUnique)
 router.post("/googleauth", googleauth)
+router.post("/checkvalidjwt", validUser, checkvalidjwt)
 export default router;

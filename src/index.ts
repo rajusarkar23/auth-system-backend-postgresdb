@@ -2,6 +2,9 @@ import express from "express"
 import dotenv from "dotenv"
 import cookieParser from "cookie-parser"
 import cors from "cors"
+import passport from "passport"
+import GoogleStrategy from "passport-google-oauth20"
+import session from "express-session"
 
 // env config
 dotenv.config()
@@ -20,6 +23,24 @@ app.use(cors({
     methods: "GET,HEAD,POST,PUT,PATCH,DELETE",
     credentials: true
 }))
+
+app.use(session({
+    secret: "secret",
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false }
+}))
+
+app.use(passport.initialize())
+app.use(passport.session())
+
+// passport.use(new GoogleStrategy({
+//     clientID: process.env.GOOGLE_CLIENT_ID,
+//     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+//     callbackURL: process.env.GOOGLE_REDIRECT_URI
+// },
+
+// ))
 
 // router
 import userRoute from "./routes/user.route"
