@@ -19,7 +19,7 @@ app.use(express.json())
 app.use(cookieParser())
 //cors
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173","https://auth-system-frontend.pages.dev"],
     methods: "GET,HEAD,POST,PUT,PATCH,DELETE",
     credentials: true
 }))
